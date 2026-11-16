@@ -8,7 +8,7 @@ Members don't need an account: each browser is signed in anonymously, which allo
 
 ## Setup
 
-See the steps in the project's setup notes: create a Firebase project, enable Firestore, Anonymous and Google sign-in, add `wahid1010.github.io` as an authorized domain, publish `firestore.rules` with the host's email, and paste the web app config into the top of `index.html`.
+See the steps in the project's setup notes: create a Firebase project, enable Firestore, Anonymous and Google sign-in, add `mastermind-1010.github.io` as an authorized domain, publish `firestore.rules` with the host's email, and paste the web app config into the top of `index.html`.
 
 ## Running a session
 
