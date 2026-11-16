@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mastermind Hot Seat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a working board (ask + ranked queue) with a host rail; #present swaps to a single big-screen view for screensharing */
+:root{
+  --bg:#F3F4F7; --surface:#FFFFFF; --ink:#141824; --muted:#5D6478; --line:#DDE0E8;
+  --accent:#2D4FD6; --accent-ink:#FFFFFF; --accent-soft:#E6EBFC;
+  --live:#D9480F; --live-soft:#FDEBE2; --ok:#2B8A3E; --warn:#C27C0E;
+  --f-display:"Archivo",system-ui,sans-serif; --f-body:"IBM Plex Sans",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F121A; --surface:#181C27; --ink:#ECEEF4; --muted:#9AA1B5; --line:#2A3040;
+  --accent:#7D95FF; --accent-ink:#0F121A; --accent-soft:#222A47;
+  --live:#FF8A50; --live-soft:#3A2218; --ok:#69C47B; --warn:#F0B54A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F121A; --surface:#181C27; --ink:#ECEEF4; --muted:#9AA1B5; --line:#2A3040;
+  --accent:#7D95FF; --accent-ink:#0F121A; --accent-soft:#222A47;
+  --live:#FF8A50; --live-soft:#3A2218; --ok:#69C47B; --warn:#F0B54A; color-scheme:dark}
+html,body{height:100%;margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body)}
+*{box-sizing:border-box}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:space-between;margin-bottom:20px}
+.brand{display:flex;flex-direction:column;gap:2px}
+.eyebrow{font:600 11px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+h1{font:800 26px/1.1 var(--f-display);margin:0;text-wrap:balance}
+.btn{color:var(--ink);border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+.status{font-size:13px;color:var(--muted)}
+.notice{background:var(--accent-soft);border-radius:8px;padding:10px 14px;font-size:14px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.ask{display:grid;gap:10px;margin-bottom:20px}
+.ask textarea{width:100%;min-height:76px;resize:vertical;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--bg)}
+.ask .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.ask input{flex:1 1 180px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--bg)}
+.count{font:500 12px var(--f-mono);color:var(--muted)}
+.tabs{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap}
+.tab{border:0;background:none;padding:6px 10px;border-radius:6px;color:var(--muted);font-weight:500}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.list{display:grid;gap:10px}
+.q{display:grid;grid-template-columns:56px minmax(0,1fr);gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px}
+.q.live{border-color:var(--live);box-shadow:inset 4px 0 0 var(--live)}
+.q.done{opacity:.65}
+.vote{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:6px 0;min-height:56px}
+.vote .arrow{font-size:14px;line-height:1}
+.vote .n{font:700 18px/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.vote[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.vote:disabled{cursor:default}
+.q .body{min-width:0;display:grid;gap:6px}
+.q .text{font-size:16px;white-space:pre-wrap;overflow-wrap:anywhere}
+.meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted)}
+.pill{font:600 11px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:999px}
+.pill.live{background:var(--live-soft);color:var(--live)}
+.pill.done{background:var(--accent-soft);color:var(--accent)}
+.hostacts{display:flex;gap:6px;flex-wrap:wrap}
+.empty{text-align:center;padding:32px 16px;color:var(--muted);border:1px dashed var(--line);border-radius:10px}
+.rail{display:grid;gap:16px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:860px){.rail{position:static}}
+.clock{font:700 56px/1 var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.clock.warn{color:var(--warn)} .clock.over{color:var(--live)}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:12px 0}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .5s linear}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.panel h2{font:700 13px/1 var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.stats b{display:block;font:700 22px var(--f-mono)}
+.stats span{font-size:12px;color:var(--muted)}
+.custom{display:flex;gap:6px;margin-top:8px}
+.custom input{width:72px;border:1px solid var(--line);border-radius:6px;padding:4px 8px;background:var(--bg)}
+
+/* ---------- Present (screenshare) view ---------- */
+.present{min-height:100%;display:grid;grid-template-rows:auto 1fr;gap:16px;padding-block:20px;padding-left:max(32px,env(safe-area-inset-left,0px));padding-right:max(32px,env(safe-area-inset-right,0px))}
+@media (max-width:600px){.present{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}}
+.p-top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.p-top .clock{font-size:clamp(48px,7vw,100px)}
+.p-main{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:32px;align-items:start}
+@media (max-width:860px){.p-main{grid-template-columns:minmax(0,1fr)}}
+.now{background:var(--surface);border:2px solid var(--live);border-radius:16px;padding:28px}
+.now .text{font:700 clamp(24px,3.2vw,44px)/1.2 var(--f-display);text-wrap:balance;overflow-wrap:anywhere;margin-top:14px}
+.now .who{margin-top:16px;font-size:18px;color:var(--muted)}
+.now.idle{border-style:dashed;border-color:var(--line)}
+.next{display:grid;gap:10px;counter-reset:q}
+.next h2{font:700 14px/1 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.ni{display:grid;grid-template-columns:56px minmax(0,1fr);gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.ni .n{font:700 28px/1 var(--f-mono);text-align:center;color:var(--accent)}
+.ni .n small{display:block;font:500 11px var(--f-body);color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:4px}
+.ni .t{font-size:clamp(15px,1.3vw,18px);line-height:1.35;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ni .w{font-size:14px;color:var(--muted);margin-top:4px}
+.ni.done{opacity:.55}
+.ni.live{border-color:var(--live)} .ni.live .n{color:var(--live)}
+.ni.open-slot{border-style:dashed;background:transparent}
+.p-foot{font-size:14px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style></head>
+<body>
+<div id="app" class="wrap"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+/* ===== Paste your Firebase web app config here (Project settings > General > Your apps).
+   These values are public by design: firestore.rules decides what anyone can do. ===== */
+const firebaseConfig = {
+  apiKey: "PASTE",
+  authDomain: "PASTE",
+  projectId: "PASTE",
+  storageBucket: "PASTE",
+  messagingSenderId: "PASTE",
+  appId: "PASTE"
+};
+
+const SEATS = 4, SEAT_MIN = 15;   // 4 business challenges x 15 minutes
+
+const S = { db:null, auth:null, uid:null, isHost:false, questions:[], votes:[], session:{}, loaded:false,
+  tab:"open", error:"", fatal:"" };
+const $ = (sel,root=document)=>root.querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const view = () => location.hash === "#present" ? "present" : "board";
+const ls = { get(k){try{return localStorage.getItem(k)}catch{return null}}, set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch{}} };
+
+/* ---------- derived ---------- */
+function tally(){ const t={}; for(const v of S.votes) t[v.question_id]=(t[v.question_id]||0)+1; return t; }
+function myVotes(){ return new Set(S.votes.filter(v=>v.voter===S.uid).map(v=>v.question_id)); }
+function ranked(status){
+  const t=tally();
+  return S.questions.filter(q=>q.status===status).map(q=>({...q,votes:t[q.id]||0,ts:q.created_at||Date.now()}))
+    .sort((a,b)=> status==="answered" ? (b.answered_at||0)-(a.answered_at||0) : (b.votes-a.votes)||(a.ts-b.ts));
+}
+function lineup(){
+  // finished seats in the order they ran, then the live one, then top-voted open challenges
+  const done=ranked("answered").slice().reverse(), live=ranked("live"), open=ranked("open");
+  const slots=[...done.map(q=>({...q,slot:"done"})),...live.map(q=>({...q,slot:"live"}))];
+  for(const q of open){ if(slots.length>=SEATS) break; slots.push({...q,slot:"next"}); }
+  return {slots:slots.slice(0,Math.max(SEATS,done.length+live.length)), extra:Math.max(0,open.length-(SEATS-done.length-live.length))};
+}
+function seatNo(){ return ranked("answered").length + (ranked("live").length?1:0); }
+function timer(){
+  const s=S.session, dur=+s.duration_ms||0;
+  const left = s.running ? (+s.ends_at_ms - Date.now()) : (+s.remaining_ms || dur);
+  return {dur,left,running:!!s.running};
+}
+function fmt(ms){ const neg=ms<0,t=Math.abs(Math.round(ms/1000)),m=Math.floor(t/60),s=t%60; return (neg?"+":"")+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0"); }
+function ago(ts){ const m=Math.round((Date.now()-ts)/60000); return m<1?"just now":m<60?m+" min ago":Math.round(m/60)+" h ago"; }
+
+/* ---------- render ---------- */
+function render(){
+  const app=$("#app"), active=document.activeElement?.id, draft=$("#qtext")?.value, nm=$("#qname")?.value;
+  if(view()==="present"){ app.className=""; app.innerHTML=presentHTML(); }
+  else { app.className="wrap"; app.innerHTML=boardHTML();
+    if($("#qtext")&&draft!=null) $("#qtext").value=draft;
+    if($("#qname")) $("#qname").value = nm!=null ? nm : (ls.get("mm-name")||"");
+  }
+  if(active&&document.getElementById(active)) document.getElementById(active).focus();
+  tick();
+}
+function timerHTML(big){
+  const {dur,left}=timer(), pct=dur?Math.max(0,Math.min(100,left/dur*100)):0;
+  return `<div class="clock ${left<0?"over":(dur&&left<=60000?"warn":"")}" id="clock">${dur?fmt(left):"--:--"}</div>
+    ${big?"":`<div class="bar"><i id="barfill" style="width:${pct}%"></i></div>`}`;
+}
+function boardHTML(){
+  const open=ranked("open"), live=ranked("live"), done=ranked("answered");
+  const list = S.tab==="answered"?done:[...live,...open];
+  const canAsk = !!S.uid;
+  let banner = S.fatal?`<div class="notice">${esc(S.fatal)}</div>`:"";
+  if(S.error) banner+=`<div class="notice">${esc(S.error)}</div>`;
+  const items = list.length?list.map(qHTML).join(""):`<div class="empty">${S.tab==="answered"?"Nothing answered yet.":(S.loaded?"No challenges yet. Submit the first one above.":"Loading challenges…")}</div>`;
+  return `
+  <header class="top">
+    <div class="brand"><span class="eyebrow">Mastermind session</span><h1>Hot Seats</h1><span class="status">${SEATS} business challenges × ${SEAT_MIN} minutes · Interactive group problem-solving</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${S.isHost?`<button class="btn" id="logout" data-logout="1">Sign out of host</button>`:`<button class="btn" id="hostbtn" data-host="1">Host sign-in</button>`}
+      <a class="btn" href="#present" style="text-decoration:none">Present view</a>
+    </div>
+  </header>
+  ${banner}
+  <div class="grid">
+    <main style="min-width:0">
+      <form class="panel ask" id="askform">
+        <label for="qtext" class="eyebrow">Your business challenge</label>
+        <textarea id="qtext" maxlength="500" placeholder="What's the challenge? Give the group the situation, what you've tried, and what you want help deciding. The top ${SEATS} by votes get a ${SEAT_MIN}-minute hot seat." ${canAsk?"":"disabled"}></textarea>
+        <div class="row">
+          <input id="qname" maxlength="60" placeholder="Your name (optional)" ${canAsk?"":"disabled"}>
+          <span class="count" id="qcount">0/500</span>
+          <button class="btn primary" type="submit" ${canAsk?"":"disabled"}>Submit challenge</button>
+        </div>
+      </form>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-open" aria-selected="${S.tab==="open"}" data-tab="open">Queue · ${open.length+live.length}</button>
+        <button class="tab" role="tab" id="tab-answered" aria-selected="${S.tab==="answered"}" data-tab="answered">Done · ${done.length}</button>
+      </div>
+      <div class="list">${items}</div>
+    </main>
+    <aside class="rail">
+      <section class="panel"><h2>Timer</h2>${timerHTML(false)}
+        ${S.isHost?hostTimerHTML():`<div class="status">Run by the host</div>`}</section>
+      <section class="panel"><h2>Session</h2><div class="stats">
+        <div><b>${Math.min(seatNo(),SEATS)}/${SEATS}</b><span>hot seat</span></div>
+        <div><b>${done.length}</b><span>seats done</span></div>
+        <div><b>${open.length}</b><span>waiting</span></div></div></section>
+      ${S.isHost?`<section class="panel"><h2>Host</h2><div class="status"><b>Start hot seat</b> puts a challenge on screen and starts a ${SEAT_MIN}-minute timer. <b>Finish</b> stops the timer and moves to the next. Share <b>Present view</b> on screen.</div>
+        <div class="presets"><button class="btn small" id="clear" data-clear="1">Clear finished challenges</button></div></section>`:""}
+    </aside>
+  </div>`;
+}
+function hostTimerHTML(){
+  const {running,dur}=timer();
+  return `<div class="presets">
+      <button class="btn small primary" id="t-toggle" data-act="toggle" ${dur?"":"disabled"}>${running?"Pause":"Start"}</button>
+      <button class="btn small" id="t-reset" data-act="reset" ${dur?"":"disabled"}>Reset</button>
+      <button class="btn small" id="t-plus" data-act="plus" ${dur?"":"disabled"}>+1 min</button></div>
+    <div class="presets">${[SEAT_MIN,5,10,20].map(m=>`<button class="btn small" id="t-${m}" data-preset="${m}">${m}m</button>`).join("")}</div>
+    <form class="custom" id="customform"><input id="custommin" type="number" min="1" max="240" placeholder="min" aria-label="Custom minutes"><button class="btn small" type="submit">Set</button></form>`;
+}
+function qHTML(q){
+  const mine=myVotes().has(q.id), canVote=!!S.uid&&q.status!=="answered";
+  const pill=q.status==="live"?`<span class="pill live">In the hot seat · ${seatNo()} of ${SEATS}</span>`:q.status==="answered"?`<span class="pill done">Done</span>`:"";
+  const host=S.isHost?`<div class="hostacts">
+      ${q.status==="open"?`<button class="btn small primary" id="live-${q.id}" data-live="${q.id}">Start hot seat (${SEAT_MIN} min)</button>`:""}
+      ${q.status==="live"?`<button class="btn small" id="done-${q.id}" data-done="${q.id}">Finish hot seat</button>`:""}
+      ${q.status!=="open"?`<button class="btn small" id="re-${q.id}" data-reopen="${q.id}">Back to queue</button>`:""}
+      <button class="btn small" id="del-${q.id}" data-del="${q.id}">Remove</button></div>`:"";
+  return `<article class="q ${q.status==="live"?"live":""} ${q.status==="answered"?"done":""}">
+    <button class="vote" id="v-${q.id}" data-vote="${q.id}" aria-pressed="${mine}" ${canVote?"":"disabled"} aria-label="${mine?"Remove upvote":"Upvote"}"><span class="arrow">▲</span><span class="n">${q.votes}</span></button>
+    <div class="body"><div class="text">${esc(q.text)}</div>
+      <div class="meta">${pill}<span>${esc(q.name||"Anonymous")}</span><span>·</span><span>${ago(q.ts)}</span></div>${host}</div></article>`;
+}
+function presentHTML(){
+  const live=ranked("live")[0], {slots,extra}=lineup(), n=seatNo(), allDone=ranked("answered").length>=SEATS&&!live;
+  const slotHTML=(q,i)=>{
+    const tag=q.slot==="done"?"Done":q.slot==="live"?"Now":"Up next";
+    return `<div class="ni ${q.slot}"><div class="n">${i+1}<small>${tag}</small></div><div style="min-width:0"><div class="t">${esc(q.text)}</div><div class="w">${esc(q.name||"Anonymous")} · ▲ ${q.votes}</div></div></div>`;
+  };
+  const empties=Array.from({length:Math.max(0,SEATS-slots.length)},(_,k)=>`<div class="ni open-slot"><div class="n">${slots.length+k+1}<small>Open</small></div><div class="t" style="color:var(--muted)">Waiting for a challenge</div></div>`).join("");
+  return `<div class="present">
+    <div class="p-top">
+      <div class="brand"><span class="eyebrow">Mastermind session</span><h1 style="font-size:clamp(22px,2.4vw,34px)">Hot Seats</h1>
+        <div class="p-foot">${SEATS} business challenges × ${SEAT_MIN} minutes · Submit &amp; vote at ${esc(location.host+location.pathname)}</div></div>
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">${timerHTML(true)}
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="btn small" id="fs" data-fs="1">Full screen</button>
+          <a class="btn small" href="#" id="back" style="text-decoration:none;text-align:center">Back to board</a></div></div>
+    </div>
+    <div class="p-main">
+      ${live?`<section class="now"><span class="pill live">Hot seat ${n} of ${SEATS}</span><div class="text">${esc(live.text)}</div><div class="who">${esc(live.name||"Anonymous")} · ▲ ${live.votes}</div></section>`
+            :`<section class="now idle"><span class="eyebrow">${allDone?"Session complete":`Hot seat ${Math.min(n+1,SEATS)} of ${SEATS}`}</span><div class="text" style="color:var(--muted)">${!S.loaded?"Loading challenges…":allDone?`All ${SEATS} hot seats done.`:"Starting soon. Vote for the challenges you want the group to take on."}</div></section>`}
+      <section class="next"><h2>Today's lineup</h2>
+        ${slots.map(slotHTML).join("")}${empties}
+        ${extra>0?`<div class="p-foot">${extra} more challenge${extra>1?"s":""} waiting. Votes decide who's next.</div>`:""}
+      </section></div></div>`;
+}
+function tick(){
+  const el=$("#clock"); if(!el) return; const {dur,left}=timer();
+  el.textContent=dur?fmt(left):"--:--"; el.className="clock "+(left<0?"over":(dur&&left<=60000?"warn":""));
+  const b=$("#barfill"); if(b) b.style.width=(dur?Math.max(0,Math.min(100,left/dur*100)):0)+"%";
+}
+setInterval(tick,250);
+setInterval(()=>{ if(!/qtext|qname|custommin|pin/.test(document.activeElement?.id||"")) render(); },30000);
+
+/* ---------- data ---------- */
+function fail(msg,err){ console.error(err); S.error=msg; render(); setTimeout(()=>{S.error="";render()},5000); }
+const hostFail=err=>fail(err?.code==="permission-denied"?"Only the host account can do that.":"That change didn't save.",err);
+function setTimer(next){
+  S.session={...S.session,...next}; render();
+  const {duration_ms=0,remaining_ms=0,ends_at_ms=null,running=false}=S.session;
+  S.db.doc("session/state").set({duration_ms,remaining_ms,ends_at_ms,running}).catch(hostFail);
+}
+function timerAct(act){
+  const {left,dur,running}=timer();
+  if(act==="toggle") setTimer(running?{running:false,remaining_ms:Math.round(left)}:{running:true,ends_at_ms:Date.now()+left});
+  if(act==="reset") setTimer({running:false,remaining_ms:dur,ends_at_ms:null});
+  if(act==="plus") setTimer(running?{ends_at_ms:+S.session.ends_at_ms+60000,duration_ms:dur+60000}:{remaining_ms:Math.round(left)+60000,duration_ms:dur+60000});
+}
+function preset(min){ const ms=min*60000; setTimer({duration_ms:ms,remaining_ms:ms,running:false,ends_at_ms:null}); }
+function setStatus(id,status){
+  const b=S.db.batch();
+  if(status==="live") for(const q of S.questions) if(q.status==="live"&&q.id!==id) b.update(S.db.doc("questions/"+q.id),{status:"open"});
+  b.update(S.db.doc("questions/"+id),{status,answeredAt:status==="answered"?Date.now():null});
+  b.commit().catch(hostFail);
+}
+let voteChain=Promise.resolve();
+function toggleVote(id){
+  if(!S.uid) return;
+  const mine=myVotes(); mine.has(id)?mine.delete(id):mine.add(id);
+  S.votes=[...S.votes.filter(v=>v.voter!==S.uid),...[...mine].map(q=>({question_id:q,voter:S.uid}))]; render();
+  const ids=[...mine];
+  voteChain=voteChain.then(()=>S.db.doc("votes/"+S.uid).set({ids})).catch(e=>fail("Your vote didn't save.",e));
+}
+async function checkHost(user){
+  // The rules only let the host account write hostcheck/<uid>, so a successful write means "host".
+  if(!user||user.isAnonymous){ S.isHost=false; return; }
+  try{ await S.db.doc("hostcheck/"+user.uid).set({at:Date.now()}); S.isHost=true; }
+  catch(e){ S.isHost=false; fail("This Google account isn't the host. Signed back in as a member.",e); await S.auth.signOut(); }
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",async e=>{
+  const t=e.target.closest("button,a"); if(!t) return; const d=t.dataset;
+  if(d.vote) toggleVote(d.vote);
+  else if(d.tab){ S.tab=d.tab; render(); }
+  else if(d.act) timerAct(d.act);
+  else if(d.preset) preset(+d.preset);
+  else if(d.live){ setStatus(d.live,"live"); const ms=SEAT_MIN*60000; setTimer({duration_ms:ms,remaining_ms:ms,running:true,ends_at_ms:Date.now()+ms}); }
+  else if(d.done){ setStatus(d.done,"answered"); const {left,running}=timer(); if(running) setTimer({running:false,remaining_ms:Math.round(left)}); }
+  else if(d.reopen) setStatus(d.reopen,"open");
+  else if(d.del||d.clear){
+    if(d.confirm){
+      if(d.del) S.db.doc("questions/"+d.del).delete().catch(hostFail);
+      else { const b=S.db.batch(); S.questions.filter(q=>q.status==="answered").forEach(q=>b.delete(S.db.doc("questions/"+q.id))); b.commit().catch(hostFail); }
+    } else { const old=t.textContent; d.confirm="1"; t.textContent="Click again to confirm"; setTimeout(()=>{ if(t.isConnected){delete t.dataset.confirm;t.textContent=old;} },3000); }
+  }
+  else if(d.host){
+    try{ await S.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+    catch(err){ if(err?.code!=="auth/popup-closed-by-user") fail("Host sign-in didn't complete. Allow pop-ups for this site and try again.",err); }
+  }
+  else if(d.logout){ await S.auth.signOut(); }
+  else if(d.fs){ const p=document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.(); p?.catch?.(()=>{}); }
+  else if(t.id==="back"){ e.preventDefault(); history.replaceState(null,"",location.pathname+location.search); render(); }
+});
+document.addEventListener("input",e=>{ if(e.target.id==="qtext") $("#qcount").textContent=e.target.value.length+"/500"; });
+document.addEventListener("submit",async e=>{
+  e.preventDefault(); const f=e.target;
+  if(f.id==="customform"){ const m=+$("#custommin").value; if(m>0) preset(Math.min(240,m)); return; }
+  if(f.id!=="askform"||!S.uid) return;
+  const text=$("#qtext").value.trim(), name=$("#qname").value.trim(); if(!text) return;
+  ls.set("mm-name",name);
+  const btn=f.querySelector("button[type=submit]"); btn.disabled=true;
+  try{
+    await S.db.collection("questions").add({text,name,status:"open",author:S.uid,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    $("#qtext").value=""; $("#qcount").textContent="0/500";
+  }catch(err){ fail("Your challenge didn't submit. Try again.",err); }
+  btn.disabled=false;
+});
+window.addEventListener("hashchange",render);
+
+/* ---------- boot ---------- */
+render();
+(function(){
+  if(!window.firebase || firebaseConfig.apiKey==="PASTE"){
+    S.fatal="This board isn't connected to a database yet. Add the Firebase config at the top of index.html."; S.loaded=true; render(); return;
+  }
+  firebase.initializeApp(firebaseConfig);
+  S.auth=firebase.auth(); S.db=firebase.firestore();
+  const slow=setTimeout(()=>{ if(!S.loaded){ S.fatal="Still connecting to the board…"; render(); } },10000);
+  let subscribed=false;
+  S.auth.onAuthStateChanged(async user=>{
+    if(!user){ try{ await S.auth.signInAnonymously(); }catch(e){ S.fatal="Submitting and voting are off: turn on Anonymous sign-in in Firebase Authentication."; render(); } return; }
+    S.uid=user.uid; await checkHost(user); render();
+    if(subscribed) return; subscribed=true;
+    S.db.collection("questions").onSnapshot(snap=>{
+      clearTimeout(slow); S.fatal="";
+      S.questions=snap.docs.map(d=>{ const x=d.data({serverTimestamps:"estimate"});
+        return {id:d.id,text:x.text,name:x.name,status:x.status,created_at:x.createdAt?.toMillis?.()||Date.now(),answered_at:x.answeredAt||0}; });
+      S.loaded=true; render();
+    },err=>{ S.fatal="Can't read the board. Check that firestore.rules is published."; S.loaded=true; render(); console.error(err); });
+    S.db.collection("votes").onSnapshot(snap=>{
+      if(snap.metadata.hasPendingWrites) return;
+      S.votes=snap.docs.flatMap(d=>(Array.isArray(d.data().ids)?d.data().ids:[]).map(q=>({question_id:q,voter:d.id}))); render();
+    },console.error);
+    S.db.doc("session/state").onSnapshot(snap=>{ if(!snap.metadata.hasPendingWrites){ S.session=snap.exists?snap.data():{}; render(); } },console.error);
+  });
+})();
+</script>
+</body>
+</html>

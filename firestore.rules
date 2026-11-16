@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// Hot Seats security rules.
+// Paste into Firebase console > Firestore Database > Rules, put YOUR Google
+// email on the marked line, and click Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isHost() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == "YOUR-GOOGLE-EMAIL@gmail.com";   // <== host email
+    }
+    function signedIn() { return request.auth != null; }
+
+    // Challenges: anyone can read; members can submit; only the host changes or removes them.
+    match /questions/{id} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['text', 'name', 'status', 'author', 'createdAt'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 500
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.status == 'open'
+        && request.resource.data.author == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if isHost();
+    }
+
+    // Votes: one document per person, listing the challenges they upvoted.
+    match /votes/{uid} {
+      allow read: if true;
+      allow write: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['ids'])
+        && request.resource.data.ids is list
+        && request.resource.data.ids.size() <= 100;
+      allow delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Shared timer: everyone reads, only the host sets it.
+    match /session/{doc} {
+      allow read: if true;
+      allow write: if isHost();
+    }
+
+    // Lets the page confirm the signed-in Google account is the host.
+    match /hostcheck/{uid} {
+      allow write: if isHost() && request.auth.uid == uid;
+    }
+  }
+}
